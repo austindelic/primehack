@@ -20,5 +20,6 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            cd /var/www/primehack
+            cd /var/www/primehack/scripts
+            chmod +x deploy.sh
             ./deploy.sh
