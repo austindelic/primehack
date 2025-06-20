@@ -27,7 +27,7 @@ echo "🔨 Re-building WebAssembly package…"
 echo "🧱 Building frontend (Vite)…"
 (
   cd "$FRONT_DIR"
-  pnpm install --frozen-lockfile --allow-scripts  # faster + deterministic
+  pnpm install --frozen-lockfile --reporter=silent  # faster + deterministic
   pnpm run build                     # produces client/dist
 )
 
