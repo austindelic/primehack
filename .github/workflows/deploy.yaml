@@ -1,0 +1,24 @@
+name: 🚀 Deploy to Droplet
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ✅ Checkout code
+        uses: actions/checkout@v3
+
+      - name: 📡 Deploy via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /var/www/prime-lab
+            ./deploy.sh
