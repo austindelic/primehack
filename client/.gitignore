@@ -1,5 +1,5 @@
 /src/pkg
-
+pnpm-workspace.yaml
 dist
 .wrangler
 .output

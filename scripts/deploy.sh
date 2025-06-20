@@ -27,8 +27,8 @@ echo "🔨 Re-building WebAssembly package…"
 echo "🧱 Building frontend (Vite)…"
 (
   cd "$FRONT_DIR"
-  npm ci                            # faster + deterministic
-  npm run build                     # produces client/dist
+  pnpm install --frozen-lockfile --allow-scripts  # faster + deterministic
+  pnpm run build                     # produces client/dist
 )
 
 # ──────────────────────────────────────────────
