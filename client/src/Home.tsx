@@ -1,12 +1,10 @@
 import { createSignal, onMount, type Component } from "solid-js";
-import init, { is_prime } from "./pkg/wasm";
+import { is_prime } from "./pkg/wasm";
 
 const Home: Component = () => {
   const [primeResult, setPrimeResult] = createSignal<boolean>();
 
   onMount(async () => {
-    // one-time Wasm
-    await init();
     setPrimeResult(is_prime(10n)); // safely call your Rust fn
   });
 
