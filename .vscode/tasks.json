@@ -1,0 +1,83 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    /* ────── 1. Build the WASM crate (one-shot) ────── */
+    {
+      "label": "build wasm (once)",
+      "type": "shell",
+      "command": "wasm-pack build --target bundler --out-dir ../client/src/pkg",
+      "options": { "cwd": "${workspaceFolder}/wasm" },
+      "problemMatcher": []
+    },
+
+    /* ────── 2a. Axum back-end ────── */
+    {
+      "label": "dev backend",
+      "type": "shell",
+      "command": "cargo run",
+      "options": {
+        "cwd": "${workspaceFolder}/server",
+        "env": {
+          "CARGO_BUILD_JOBS": "1",
+          "RUSTFLAGS": "-C codegen-units=1",
+          "RUST_LOG": "debug",
+          "PORT": "3000"
+        },
+        "presentation": {
+          "group": "servers",
+          "panel": "dedicated",
+          "reveal": "always"
+        }
+      },
+      "isBackground": false, // long-lived, no matcher needed
+      "problemMatcher": ["$rustc"] // still captures compiler errors
+    },
+
+    /* ────── 2b. Solid + Vite front-end ────── */
+    {
+      "label": "dev frontend",
+      "type": "shell",
+      // ← flags keep the port fixed & pop a browser tab
+      "command": "pnpm",
+      "args": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5173",
+        "--strictPort",
+        "--host",
+        "--open"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/client",
+        "env": {
+          "PNPM_CHILD_CONCURRENCY": "2",
+          "PNPM_CONFIG_NETWORK_CONCURRENCY": "2",
+          "NODE_OPTIONS": "--max_old_space_size=512"
+        },
+        "presentation": {
+          "group": "servers",
+          "panel": "dedicated",
+          "reveal": "always"
+        }
+      },
+      "isBackground": false
+    },
+
+    /* ────── 3. “Serve both” – run 2a & 2b in parallel ────── */
+    {
+      "label": "serve both",
+      "dependsOn": ["dev backend", "dev frontend"],
+      "dependsOrder": "parallel"
+    },
+
+    /* ────── 4. One-click compound task ────── */
+    {
+      "label": "start dev",
+      "group": { "kind": "build", "isDefault": true },
+      "dependsOn": ["build wasm (once)", "serve both"],
+      "dependsOrder": "sequence" // build first, then spawn both servers
+    }
+  ]
+}

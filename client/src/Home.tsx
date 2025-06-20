@@ -1,24 +1,43 @@
-import { createSignal, onMount, type Component } from "solid-js";
+import { createSignal, onCleanup, type Component, For } from "solid-js";
 import { is_prime } from "./pkg/wasm";
 
-const Home: Component = () => {
-  const [primeResult, setPrimeResult] = createSignal<boolean>();
+type Item = { value: bigint; prime: boolean };
 
-  onMount(async () => {
-    setPrimeResult(is_prime(10n)); // safely call your Rust fn
-  });
+const Home: Component = () => {
+  const [n, setN] = createSignal<bigint>(0n);
+  const [items, setItems] = createSignal<Item[]>([]); // every number, newest first
+
+  const timer = setInterval(() => {
+    const next = n() + 1n;
+    setN(next);
+
+    const prime = is_prime(next);
+    // prepend so the list scrolls downward
+    setItems((list) => [{ value: next, prime }, ...list].slice(0, 10)); // keep last 2 000
+  }); // adjust speed to taste
+
+  onCleanup(() => clearInterval(timer));
 
   return (
-    <div>
-      <h1>"Calculating…"</h1>
-      <h1>
-        {primeResult() === undefined
-          ? "Calculating…"
-          : primeResult()
-          ? "Prime!"
-          : "Not prime!"}
-      </h1>
-    </div>
+    <main style={{ padding: "1rem", "font-family": "monospace" }}>
+      <h1>Prime stream</h1>
+      <p>Testing n = {n().toString()}</p>
+
+      <ul style={{ "list-style": "none", padding: 0 }}>
+        <For each={items()}>
+          {(item) => (
+            <li
+              style={{
+                color: item.prime ? "green" : "red",
+                "white-space": "pre",
+              }}
+            >
+              {item.value.toString()}
+            </li>
+          )}
+        </For>
+      </ul>
+    </main>
   );
 };
 
