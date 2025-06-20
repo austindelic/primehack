@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
 
-export PNPM_CHILD_CONCURRENCY=2     # default is ~16
-export PNPM_CONFIG_NETWORK_CONCURRENCY=2
-export NODE_OPTIONS="--max_old_space_size=256"  # cap Node heap to 256 MB
-
 set -euo pipefail
 
 APP_DIR=/var/www/primehack           # project root on the server
@@ -31,6 +27,11 @@ echo "🔨 Re-building WebAssembly package…"
 # ──────────────────────────────────────────────
 echo "🧱 Building frontend (Vite)…"
 (
+  
+  export PNPM_CHILD_CONCURRENCY=2     # default is ~16
+  export PNPM_CONFIG_NETWORK_CONCURRENCY=2
+  export NODE_OPTIONS="--max_old_space_size=256"  # cap Node heap to 256 MB
+
   cd "$FRONT_DIR"
   pnpm install --frozen-lockfile --reporter=silent  # faster + deterministic
   pnpm run build                     # produces client/dist
@@ -39,6 +40,9 @@ echo "🧱 Building frontend (Vite)…"
 # ──────────────────────────────────────────────
 echo "⚙️  Building backend (Rust)…"
 (
+  export CARGO_BUILD_JOBS=1
+  export RUSTFLAGS="-C codegen-units=1"
+  
   cd "$SERVER_DIR"
   cargo build --release             # binary → target/release/$BIN_NAME
 )
