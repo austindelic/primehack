@@ -1,44 +1,73 @@
 import { createSignal, onCleanup, type Component, For } from "solid-js";
-import { is_prime } from "./pkg/wasm";
+import { prime_u64, prime_bigint } from "./pkg";
 
-type Item = { value: bigint; prime: boolean };
+/** Route calls to the right Rust predicate */
+function rustIsPrime(n: bigint): { prime: boolean; probable: boolean } {
+  if (n <= 0x1_ffff_ffff_ffff_ffn) {
+    return { prime: prime_u64(n), probable: false };
+  }
+  return { prime: prime_bigint(n.toString()), probable: true };
+}
 
-const Home: Component = () => {
-  const [n, setN] = createSignal<bigint>(0n);
-  const [items, setItems] = createSignal<Item[]>([]); // every number, newest first
+type Item = { value: bigint; probable: boolean };
 
+const PrimeStream: Component = () => {
+  const [p, setP] = createSignal<bigint>(1_000n); // current exponent
+  const [n, setN] = createSignal<bigint>((1n << 256n) - 1n); // 2^p – 1 candidate
+  const [primes, setPrimes] = createSignal<Item[]>([]); // newest first
+
+  /** tick-loop: build 2^p − 1, check, bump exponent */
   const timer = setInterval(() => {
-    const next = n() + 1n;
-    setN(next);
+    const nextP = p() + 1n;
+    const candidate = (1n << nextP) - 1n;
 
-    const prime = is_prime(next);
-    // prepend so the list scrolls downward
-    setItems((list) => [{ value: next, prime }, ...list].slice(0, 10)); // keep last 2 000
-  }); // adjust speed to taste
+    setP(nextP);
+    setN(candidate);
+
+    const { prime, probable } = rustIsPrime(candidate);
+    if (prime) {
+      setPrimes((list) =>
+        [{ value: candidate, probable }, ...list].slice(0, 10)
+      );
+    }
+  }); // adjust interval (ms) to taste
 
   onCleanup(() => clearInterval(timer));
 
+  // ───────────────────────── UI ─────────────────────────
   return (
-    <main style={{ padding: "1rem", "font-family": "monospace" }}>
-      <h1>Prime stream</h1>
-      <p>Testing n = {n().toString()}</p>
+    <main class="p-4 font-mono max-w-md mx-auto space-y-3">
+      <h1 class="text-xl font-semibold">
+        Scanning&nbsp;2<sup>p</sup> − 1
+      </h1>
 
-      <ul style={{ "list-style": "none", padding: 0 }}>
-        <For each={items()}>
+      <p class="break-all">
+        Current&nbsp;
+        <code>p</code>&nbsp;=&nbsp;{p().toString()},&nbsp;
+        <code>n</code>&nbsp;=&nbsp;
+        <span class="break-all">{n().toString()}</span>
+      </p>
+
+      <ul class="list-none p-0 space-y-0.5">
+        <For each={primes()}>
           {(item) => (
             <li
-              style={{
-                color: item.prime ? "green" : "red",
-                "white-space": "pre",
-              }}
+              class={`font-bold ${
+                item.probable ? "text-yellow-500" : "text-green-600"
+              }`}
             >
               {item.value.toString()}
             </li>
           )}
         </For>
       </ul>
+
+      <p class="text-xs text-slate-500">
+        Green = proven prime (<code>is_prime_u64</code>); yellow = probably
+        prime (<code>is_probable_prime</code>).
+      </p>
     </main>
   );
 };
 
-export default Home;
+export default PrimeStream;
