@@ -4,7 +4,7 @@ set -e
 cd /var/www/primehack
 
 echo "📥 Pulling latest changes..."
-git pull origin main
+git pull origin master
 
 echo "🔨 Building WASM..."
 cd wasm && wasm-pack build --target web && cd ..
