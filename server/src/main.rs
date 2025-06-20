@@ -43,8 +43,8 @@ async fn main() {
         )
         .route("/submit", post(receive_primes))
         // static files afterwards
-        .route_service("/", ServeDir::new("../client/dist"))
-        .route_service("/{*path}", ServeDir::new("../client/dist"));
+        .route_service("/", ServeDir::new("../client"))
+        .route_service("/{*path}", ServeDir::new("../client"));
 
     // Start the server
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
