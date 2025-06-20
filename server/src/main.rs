@@ -27,6 +27,8 @@ struct PrimeResult {
     primes: Vec<u64>,
 }
 
+const DIST: &str = "/var/www/primehack/client/dist";
+
 #[tokio::main]
 async fn main() {
     // Start counter at 1,000,000
@@ -43,8 +45,8 @@ async fn main() {
         )
         .route("/submit", post(receive_primes))
         // static files afterwards
-        .route_service("/", ServeDir::new("../client"))
-        .route_service("/{*path}", ServeDir::new("../client"));
+        .route_service("/", ServeDir::new(DIST))
+        .route_service("/{*path}", ServeDir::new(DIST));
 
     // Start the server
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
