@@ -12,3 +12,4 @@ wasm-pack build --target web --out-dir ../client/src/pkg
 
 ok hoping this works!
 This is a test
+hopefully it works now!
