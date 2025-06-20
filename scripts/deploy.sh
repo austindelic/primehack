@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_DIR=/var/www/primehack           # project root on the server TEST
+APP_DIR=/var/www/primehack           # project root on the server
 FRONT_DIR="$APP_DIR/client"          # Solid/Vite code
 WASM_CRATE="$APP_DIR/wasm"           # Rust → WebAssembly crate
 SERVER_DIR="$APP_DIR/server"         # Axum backend
