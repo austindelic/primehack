@@ -4,3 +4,8 @@ New redploy test
 NEw push test
 OMG again
 AGAIN PLEASE
+
+```
+cd wasm
+wasm-pack build --target web --out-dir ../client/src/pkg
+```
