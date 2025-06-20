@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+
+export PNPM_CHILD_CONCURRENCY=2     # default is ~16
+export PNPM_CONFIG_NETWORK_CONCURRENCY=2
+export NODE_OPTIONS="--max_old_space_size=256"  # cap Node heap to 256 MB
+
 set -euo pipefail
 
 APP_DIR=/var/www/primehack           # project root on the server
