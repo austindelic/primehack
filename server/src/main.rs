@@ -33,9 +33,7 @@ const DIST: &str = "/var/www/primehack/client/dist";
 async fn main() {
     // Start counter at 1,000,000
     let counter = Arc::new(Mutex::new(1_000_000u64));
-
-    // Build the app
-    let app = Router::new()
+    let api_router = Router::new()
         .route(
             "/range",
             get({
@@ -47,6 +45,12 @@ async fn main() {
         // static files afterwards
         .route_service("/", ServeDir::new(DIST))
         .route_service("/{*path}", ServeDir::new(DIST));
+    // Build the app
+
+    let app = Router::new()
+        .nest("/api", api_router)
+        // Serve static files for all other routes (SPA)
+        .fallback_service(ServeDir::new(DIST));
 
     // Start the server
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
