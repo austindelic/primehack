@@ -5,6 +5,7 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
+
 use serde::{Deserialize, Serialize};
 use std::{
     net::SocketAddr,
@@ -43,8 +44,7 @@ async fn main() {
         )
         .route("/submit", post(receive_primes))
         // static files afterwards
-        .route_service("/", ServeDir::new(DIST))
-        .route_service("/{*path}", ServeDir::new(DIST));
+        .route("/submit", post(receive_primes));
     // Build the app
 
     let app = Router::new()
