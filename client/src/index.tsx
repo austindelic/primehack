@@ -5,6 +5,7 @@ import { render } from "solid-js/web";
 import Home from "./Home";
 import Bench from "./bench/Bench";
 import Spiral from "./spiral/Spiral";
+import Test from "./test/Test";
 import { Route, Router } from "@solidjs/router";
 
 const root = document.getElementById("root");
@@ -21,6 +22,7 @@ render(
       <Route path="/" component={Home} />
       <Route path="/bench" component={Bench} />
       <Route path="/spiral" component={Spiral} />
+      <Route path="/test" component={Test} />
     </Router>
   ),
   root!

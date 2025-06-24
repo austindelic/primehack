@@ -5,58 +5,71 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
-use num_bigint::BigUint;
-use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 use std::{
+    fs::File,
+    io::Write,
     net::SocketAddr,
-    str::FromStr,
     sync::{Arc, Mutex},
 };
 use tokio::net::TcpListener;
 use tower_http::services::{ServeDir, ServeFile};
 
-type SharedCounter = Arc<Mutex<BigUint>>;
-type SharedPrimes = Arc<Mutex<Vec<bool>>>;
+const DIST: &str = "/var/www/primehack/client/dist";
+const PRIME_EXPONENT: u64 = 89259833;
+const TASK_SIZE: u64 = 1000;
+
+type SharedIteration = Arc<Mutex<u64>>;
+type SharedResults = Arc<Mutex<Vec<IterationResult>>>;
 
 #[derive(Serialize)]
-struct Range {
-    start: String,
-    end: String,
+struct IterationTask {
+    iteration_start: u64,
+    iteration_end: u64,
+    prime_exponent: u64,
 }
 
-#[derive(Deserialize, Debug)]
-struct PrimeResult {
-    results: Vec<(String, bool)>,
+#[derive(Deserialize, Serialize, Debug, Clone)]
+struct IterationResult {
+    start: u64,
+    end: u64,
+    status: String,
 }
-
-const DIST: &str = "/var/www/primehack/client/dist";
 
 #[tokio::main]
 async fn main() {
-    let counter = Arc::new(Mutex::new(BigUint::zero()));
-    let found_primes = Arc::new(Mutex::new(Vec::new()));
+    // Write largest known prime representation to a file
+    let mut file = File::create("largest_prime.txt").expect("Failed to create file");
+    let message = format!(
+        "The current largest known prime is 2^{} - 1\n",
+        PRIME_EXPONENT
+    );
+    file.write_all(message.as_bytes())
+        .expect("Failed to write to file");
+
+    let counter = Arc::new(Mutex::new(0u64));
+    let results = Arc::new(Mutex::new(Vec::new()));
 
     let api_router = Router::new()
         .route(
             "/get-task",
             get({
                 let c = counter.clone();
-                move || get_range(c)
+                move || get_iteration_task(c)
             }),
         )
         .route(
             "/submit",
             post({
-                let primes = found_primes.clone();
-                move |payload| receive_primes(primes.clone(), payload)
+                let r = results.clone();
+                move |payload| submit_result(r.clone(), payload)
             }),
         )
         .route(
-            "/get-primes",
+            "/results",
             get({
-                let primes = found_primes.clone();
-                move || get_primes(primes.clone())
+                let r = results.clone();
+                move || get_all_results(r.clone())
             }),
         )
         .route("/hello-world", get(hello_world));
@@ -72,36 +85,31 @@ async fn main() {
         .unwrap();
 }
 
-async fn get_range(counter: SharedCounter) -> impl IntoResponse {
+async fn get_iteration_task(counter: SharedIteration) -> impl IntoResponse {
     let mut current = counter.lock().unwrap();
-    let start = current.clone();
-    let end = &start + BigUint::from(999u64);
-    *current += BigUint::from(500_000u64);
-    Json(Range {
-        start: start.to_string(),
-        end: end.to_string(),
+    let start = *current;
+    let end = start + TASK_SIZE;
+    *current += TASK_SIZE;
+
+    Json(IterationTask {
+        iteration_start: start,
+        iteration_end: end,
+        prime_exponent: PRIME_EXPONENT,
     })
 }
 
-async fn receive_primes(state: SharedPrimes, Json(data): Json<PrimeResult>) -> impl IntoResponse {
-    let mut primes = state.lock().unwrap();
-    for (num_str, is_prime) in data.results {
-        if let Ok(big) = BigUint::from_str(&num_str) {
-            if let Ok(idx) = usize::try_from(big) {
-                if idx >= primes.len() {
-                    primes.resize(idx + 1, false);
-                }
-                primes[idx] = is_prime;
-            }
-        }
-    }
-    println!("📬 Updated primes. Length: {}", primes.len());
+async fn submit_result(
+    state: SharedResults,
+    Json(data): Json<IterationResult>,
+) -> impl IntoResponse {
+    let mut results = state.lock().unwrap();
+    results.push(data);
     StatusCode::OK
 }
 
-async fn get_primes(state: SharedPrimes) -> impl IntoResponse {
-    let primes = state.lock().unwrap();
-    Json(primes.clone())
+async fn get_all_results(state: SharedResults) -> impl IntoResponse {
+    let results = state.lock().unwrap();
+    Json(results.clone())
 }
 
 async fn hello_world() -> impl IntoResponse {
