@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+set -euxo pipefail
+trap 'echo "❌ Deployment failed on line $LINENO"' ERR
 
 APP_DIR=/var/www/primehack           # project root on the server
 FRONT_DIR="$APP_DIR/client"          # Solid/Vite code
@@ -19,7 +20,6 @@ git pull origin master
 echo "🔨 Re-building WebAssembly package…"
 (
   cd "$WASM_CRATE"
-  # Put the generated pkg inside the frontend *source* so Vite can pick it up
   wasm-pack build --release --target bundler \
                   --out-dir "$FRONT_DIR/src/pkg"
 )
@@ -27,24 +27,30 @@ echo "🔨 Re-building WebAssembly package…"
 # ──────────────────────────────────────────────
 echo "🧱 Building frontend (Vite)…"
 (
-  
-  export PNPM_CHILD_CONCURRENCY=2     # default is ~16
-  export PNPM_CONFIG_NETWORK_CONCURRENCY=2
-  export NODE_OPTIONS="--max_old_space_size=256"  # cap Node heap to 256 MB
-
   cd "$FRONT_DIR"
-  pnpm install --frozen-lockfile --reporter=silent  # faster + deterministic
-  pnpm run build                     # produces client/dist
+
+  export PNPM_CHILD_CONCURRENCY=2
+  export PNPM_CONFIG_NETWORK_CONCURRENCY=2
+  export NODE_OPTIONS="--max_old_space_size=256"
+
+  pnpm install --frozen-lockfile --reporter=silent
+
+  echo "🚧 Running Vite build..."
+  if ! pnpm run build; then
+    echo "❌ Vite build failed!"
+    exit 1
+  fi
 )
 
 # ──────────────────────────────────────────────
 echo "⚙️  Building backend (Rust)…"
 (
+  cd "$SERVER_DIR"
+
   export CARGO_BUILD_JOBS=1
   export RUSTFLAGS="-C codegen-units=1"
-  
-  cd "$SERVER_DIR"
-  cargo build --release             # binary → target/release/$BIN_NAME
+
+  cargo build --release
 )
 
 # ──────────────────────────────────────────────
@@ -55,3 +61,4 @@ pm2 restart "$BIN_NAME" \
        --port "$PORT"
 
 echo "✅ Deployment complete!"
+exit 0
