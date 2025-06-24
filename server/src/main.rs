@@ -75,8 +75,21 @@ async fn main() {
 async fn get_range(counter: SharedCounter) -> impl IntoResponse {
     let mut current = counter.lock().unwrap();
     let start = current.clone();
-    let end = &start + BigUint::from(999u64);
-    *current += BigUint::from(1000u64);
+
+    // Estimate time per op based on bit length
+    let bit_len = start.bits();
+    let ops = if bit_len <= 64 {
+        2_500_000u64 // u64
+    } else if bit_len <= 256 {
+        21_000u64 // 256-bit
+    } else {
+        // Slow zone: scale down range even more
+        (3000.0 / (0.1408 * (bit_len as f64 / 256.0))).round() as u64
+    };
+
+    let end = &start + BigUint::from(ops);
+    *current += BigUint::from(ops);
+
     Json(Range {
         start: start.to_string(),
         end: end.to_string(),
