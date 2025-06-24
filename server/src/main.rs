@@ -12,7 +12,6 @@ use std::{
 };
 use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
-use tower_http::services::ServeFile;
 
 // === Shared number range tracker ===
 type SharedCounter = Arc<Mutex<u64>>;
@@ -51,9 +50,7 @@ async fn main() {
     let app = Router::new()
         .nest("/api", api_router)
         // Serve static files for all other routes (SPA)
-        .fallback_service(
-            ServeDir::new(DIST).not_found_service(ServeFile::new(format!("{}/index.html", DIST))),
-        );
+        .fallback_service(ServeDir::new(DIST));
 
     // Start the server
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
