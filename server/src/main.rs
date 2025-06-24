@@ -2,7 +2,7 @@ use axum::{
     Router,
     extract::Json,
     http::StatusCode,
-    response::{Html, IntoResponse},
+    response::IntoResponse,
     routing::{get, post},
 };
 
@@ -11,9 +11,9 @@ use std::{
     net::SocketAddr,
     sync::{Arc, Mutex},
 };
-use tokio::fs;
 use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
+use tower_http::services::ServeFile;
 
 // === Shared number range tracker ===
 type SharedCounter = Arc<Mutex<u64>>;
@@ -31,21 +31,10 @@ struct PrimeResult {
 
 const DIST: &str = "/var/www/primehack/client/dist";
 
-async fn spa_fallback() -> impl IntoResponse {
-    let index_path = format!("{}/index.html", DIST);
-    match fs::read_to_string(&index_path).await {
-        Ok(contents) => Html(contents).into_response(),
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-    }
-}
-
 #[tokio::main]
 async fn main() {
     // Start counter at 1,000,000
     let counter = Arc::new(Mutex::new(1_000_000u64));
-
-    // Build the app
-
     let api_router = Router::new()
         .route(
             "/range",
@@ -54,12 +43,19 @@ async fn main() {
                 move || get_range(c)
             }),
         )
-        .route("/submit", post(receive_primes));
+        .route("/submit", post(receive_primes))
+        // static files afterwards
+        .route("/submit", post(receive_primes))
+        .route_service("/", ServeDir::new(DIST));
+    // .route_service("/{*path}", ServeDir::new(DIST));
+    // Build the app
 
     let app = Router::new()
         .nest("/api", api_router)
-        .nest_service("/", ServeDir::new(DIST))
-        .fallback(spa_fallback);
+        // Serve static files for all other routes (SPA)
+        .fallback_service(
+            ServeDir::new(DIST).not_found_service(ServeFile::new(format!("{}/index.html", DIST))),
+        );
 
     // Start the server
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
