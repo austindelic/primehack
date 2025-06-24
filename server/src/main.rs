@@ -42,7 +42,6 @@ async fn main() {
                 move || get_range(c)
             }),
         )
-        .route("/submit", post(receive_primes))
         // static files afterwards
         .route("/submit", post(receive_primes));
     // .route_service("/{*path}", ServeDir::new(DIST));
