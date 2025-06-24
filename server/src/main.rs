@@ -103,18 +103,11 @@ async fn get_iteration_task(counter: SharedIteration) -> impl IntoResponse {
     let end = (start + TASK_SIZE).min(PRIME_EXPONENT - 2);
     *current = end;
 
-    let current_residue = if start == 0 {
-        "4".to_string() // Initial residue
-    } else {
-        // TODO: Fetch last submitted residue (append a residue chain to SharedResults)
-        "MISSING_PREV".to_string()
-    };
-
     Json(IterationTask {
         start_iter: start,
         end_iter: end,
-        current_residue,
         prime_exponent: PRIME_EXPONENT,
+        current_residue: "4".to_string(), // Hardcoded for now
     })
 }
 
