@@ -1,73 +1,50 @@
-import { createSignal, onCleanup, type Component, For } from "solid-js";
-import { prime_u64, prime_bigint } from "./pkg";
+import { createSignal, For } from "solid-js";
+import { prime_bigint } from "./pkg/wasm"; // wasm-pack must be loaded beforehand
 
-/** Route calls to the right Rust predicate */
-function rustIsPrime(n: bigint): { prime: boolean; probable: boolean } {
-  if (n <= 0x1_ffff_ffff_ffff_ffn) {
-    return { prime: prime_u64(n), probable: false };
-  }
-  return { prime: prime_bigint(n.toString()), probable: true };
-}
+export default function PrimeHackApp() {
+  const [status, setStatus] = createSignal("Idle");
+  const [found, setFound] = createSignal<bigint[]>([]);
 
-type Item = { value: bigint; probable: boolean };
+  const generateAndSubmit = async () => {
+    setStatus("Fetching range...");
+    const res = await fetch("/api/range");
+    const { start, end } = await res.json();
 
-const PrimeStream: Component = () => {
-  const [p, setP] = createSignal<bigint>(1_000n); // current exponent
-  const [n, setN] = createSignal<bigint>((1n << 256n) - 1n); // 2^p – 1 candidate
-  const [primes, setPrimes] = createSignal<Item[]>([]); // newest first
+    const results: bigint[] = [];
 
-  /** tick-loop: build 2^p − 1, check, bump exponent */
-  const timer = setInterval(() => {
-    const nextP = p() + 1n;
-    const candidate = (1n << nextP) - 1n;
+    setStatus(`Testing numbers from ${start} to ${end}...`);
 
-    setP(nextP);
-    setN(candidate);
-
-    const { prime, probable } = rustIsPrime(candidate);
-    if (prime) {
-      setPrimes((list) =>
-        [{ value: candidate, probable }, ...list].slice(0, 10)
-      );
+    for (let i = start; i <= end; i++) {
+      const isPrime = prime_bigint(i.toString());
+      if (isPrime) results.push(BigInt(i));
     }
-  }); // adjust interval (ms) to taste
 
-  onCleanup(() => clearInterval(timer));
+    setStatus(`Submitting ${results.length} primes...`);
+    await fetch("/api/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ primes: results.map((n) => n.toString()) }),
+    });
 
-  // ───────────────────────── UI ─────────────────────────
+    setFound([...found(), ...results]);
+    setStatus("Done.");
+  };
+
   return (
-    <main class="p-4 font-mono max-w-md mx-auto space-y-3">
-      <h1 class="text-xl font-semibold">
-        Scanning&nbsp;2<sup>p</sup> − 1
-      </h1>
+    <div class="min-h-screen bg-black text-white p-6">
+      <h1 class="text-3xl font-bold text-cyan-400 mb-4">PrimeHack</h1>
+      <button
+        class="bg-cyan-500 px-4 py-2 rounded font-bold mb-4"
+        onClick={generateAndSubmit}
+      >
+        Get Range & Check Primes
+      </button>
 
-      <p class="break-all">
-        Current&nbsp;
-        <code>p</code>&nbsp;=&nbsp;{p().toString()},&nbsp;
-        <code>n</code>&nbsp;=&nbsp;
-        <span class="break-all">{n().toString()}</span>
-      </p>
+      <p class="text-gray-400 mb-4">{status()}</p>
 
-      <ul class="list-none p-0 space-y-0.5">
-        <For each={primes()}>
-          {(item) => (
-            <li
-              class={`font-bold ${
-                item.probable ? "text-yellow-500" : "text-green-600"
-              }`}
-            >
-              {item.value.toString()}
-            </li>
-          )}
-        </For>
-      </ul>
-
-      <p class="text-xs text-slate-500">
-        Green = proven prime (<code>is_prime_u64</code>); yellow = probably
-        prime (<code>is_probable_prime</code>).
-      </p>
-    </main>
+      <div class="bg-[#111] p-4 rounded h-64 overflow-y-scroll text-green-400 font-mono">
+        <For each={found()}>{(p) => <div>{p.toString()}</div>}</For>
+      </div>
+    </div>
   );
-};
-
-export default PrimeStream;
+}

@@ -1,1 +1,16 @@
-@import 'tailwindcss';
+@import "tailwindcss";
+
+/* src/index.css or wherever your Tailwind globals live */
+
+@layer base {
+  /* hide webkit scrollbars inside xterm */
+  .xterm .xterm-viewport::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* hide for Firefox and IE/Edge */
+  .xterm .xterm-viewport {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+}

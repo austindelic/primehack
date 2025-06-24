@@ -7,6 +7,7 @@ use num_prime::{
     PrimalityTestConfig,
     nt_funcs::{is_prime, is_prime64},
 };
+use num_traits::ToPrimitive;
 use wasm_bindgen::prelude::*;
 
 /// Fast, *deterministic* primality check for any `u64`.
@@ -26,7 +27,11 @@ pub fn prime_bigint(s_number: &str) -> bool {
         Err(_) => return false,
     };
 
-    let cfg = Some(PrimalityTestConfig::bpsw());
+    // If n fits in u64, use the fast deterministic check
+    if let Some(n_u64) = n.to_u64() {
+        return is_prime64(n_u64);
+    }
 
+    let cfg = Some(PrimalityTestConfig::bpsw());
     is_prime(&n, cfg).probably() // `Primality::probably()` → bool
 }
