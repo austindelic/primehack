@@ -45,9 +45,7 @@ async fn main() {
         )
         .route("/submit", post(receive_primes))
         // static files afterwards
-        .route("/submit", post(receive_primes))
-        .route_service("/", ServeDir::new(DIST))
-        .route_service("/{*path}", ServeDir::new(DIST));
+        .route("/submit", post(receive_primes));
     // Build the app
 
     let app = Router::new()
