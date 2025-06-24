@@ -14,6 +14,7 @@ TEST_URL="http://localhost:$PORT"
 ROUTES=(
   "/"
   "/bench"
+  "/saigfdhasdidjfhajhsfbasjhfb"
   "/api/range"
 )
 

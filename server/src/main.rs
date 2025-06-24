@@ -2,7 +2,7 @@ use axum::{
     Router,
     extract::Json,
     http::StatusCode,
-    response::IntoResponse,
+    response::{Html, IntoResponse},
     routing::{get, post},
 };
 
@@ -11,6 +11,7 @@ use std::{
     net::SocketAddr,
     sync::{Arc, Mutex},
 };
+use tokio::fs;
 use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
 
@@ -30,6 +31,14 @@ struct PrimeResult {
 
 const DIST: &str = "/var/www/primehack/client/dist";
 
+async fn spa_fallback() -> impl IntoResponse {
+    let index_path = format!("{}/index.html", DIST);
+    match fs::read_to_string(&index_path).await {
+        Ok(contents) => Html(contents).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
 #[tokio::main]
 async fn main() {
     // Start counter at 1,000,000
@@ -48,11 +57,9 @@ async fn main() {
         .route("/submit", post(receive_primes));
 
     let app = Router::new()
-        // all routes in api_router will now live under /api/…
         .nest("/api", api_router)
-        // serve your SPA (or static files) at the root
-        .route_service("/", ServeDir::new(DIST))
-        .route_service("/{*path}", ServeDir::new(DIST));
+        .nest_service("/", ServeDir::new(DIST))
+        .fallback(spa_fallback);
 
     // Start the server
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
