@@ -9,10 +9,10 @@ use num_prime::{
     PrimalityTestConfig,
     nt_funcs::{is_prime, is_prime64},
 };
+use num_traits::One;
 use num_traits::ToPrimitive;
-use num_traits::{One, Zero};
+use num_traits::Zero;
 use wasm_bindgen::prelude::*;
-
 /// Fast, *deterministic* primality check for any `u64`.
 #[wasm_bindgen]
 pub fn prime_u64(n: u64) -> bool {
@@ -122,13 +122,21 @@ pub fn pow_front(b: &str, e: &str) -> String {
 
 #[wasm_bindgen]
 pub fn llt_chunked(start: u64, end: u64, residue: &str, exponent: &str) -> String {
-    let mut s = BigUint::from_str(residue).unwrap_or(BigUint::from(4u32));
-    let p = BigUint::from_str(exponent).unwrap();
+    let mut s = match BigUint::from_str(residue) {
+        Ok(v) => v,
+        Err(_) => return "invalid residue".to_string(),
+    };
+
+    let p = match BigUint::from_str(exponent) {
+        Ok(v) => v,
+        Err(_) => return "invalid exponent".to_string(),
+    };
+
     let m = pow(&BigUint::from(2u32), &p) - BigUint::one();
 
     let mut i = start;
     while i < end {
-        s = (s.clone() * s.clone() - BigUint::from(2u32)) % &m;
+        s = (&s * &s - BigUint::from(2u32)) % &m;
         i += 1;
     }
 
