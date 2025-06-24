@@ -9,34 +9,51 @@ export default function PrimeHackApp() {
   const generateAndSubmit = async () => {
     while (running()) {
       setStatus("Fetching chunk...");
-      const res = await fetch("/api/get-task");
-      const task = await res.json(); // start_iter, end_iter, current_residue, prime_exponent
 
-      setStatus(
-        `Running LLT iterations ${task.start_iter} to ${task.end_iter}...`
-      );
-      const residue = llt_chunked(
-        BigInt(task.start_iter),
-        BigInt(task.end_iter),
-        task.current_residue,
-        task.prime_exponent.toString()
-      );
+      try {
+        const res = await fetch("/api/get-task");
+        const task = await res.json();
 
-      setStatus(`Submitting residue for iter ${task.end_iter}...`);
-      await fetch("/api/submit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          start: task.start_iter,
-          end: task.end_iter,
-          residue,
-        }),
-      });
+        setStatus(
+          `Running LLT iterations ${task.start_iter} to ${task.end_iter}...`
+        );
 
-      setFound((prev) => [residue, ...prev].slice(0, 100));
-      setStatus("Waiting for next task...");
-      await new Promise((r) => setTimeout(r, 100));
+        let residue = "error";
+        try {
+          residue = llt_chunked(
+            BigInt(task.start_iter),
+            BigInt(task.end_iter),
+            task.current_residue,
+            task.prime_exponent.toString()
+          );
+        } catch (err) {
+          console.error("WASM error:", err);
+          setStatus("Error in WASM computation");
+          stop();
+          return;
+        }
+
+        await fetch("/api/submit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            start: task.start_iter,
+            end: task.end_iter,
+            residue,
+          }),
+        });
+
+        setFound((prev) => [residue, ...prev].slice(0, 100));
+        setStatus("Waiting for next task...");
+        await new Promise((r) => setTimeout(r, 100));
+      } catch (err) {
+        console.error("Error fetching or processing task:", err);
+        setStatus("Failed to fetch task");
+        stop();
+        return;
+      }
     }
+
     setStatus("Stopped.");
   };
 
