@@ -1,5 +1,5 @@
 import { createSignal, For } from "solid-js";
-import { prime_bigint } from "./pkg/wasm"; // wasm-pack must be loaded beforehand
+import { prime_bigint } from "./pkg/wasm"; // assumes wasm-pack output is ready
 
 export default function PrimeHackApp() {
   const [status, setStatus] = createSignal("Idle");
@@ -7,26 +7,32 @@ export default function PrimeHackApp() {
 
   const generateAndSubmit = async () => {
     setStatus("Fetching range...");
-    const res = await fetch("/api/range");
+    const res = await fetch("/api/get-task");
     const { start, end } = await res.json();
 
-    const results: bigint[] = [];
+    const startBig = BigInt(start);
+    const endBig = BigInt(end);
+    const results: [string, boolean][] = [];
 
     setStatus(`Testing numbers from ${start} to ${end}...`);
 
-    for (let i = start; i <= end; i++) {
+    for (let i = startBig; i <= endBig; i++) {
       const isPrime = prime_bigint(i.toString());
-      if (isPrime) results.push(BigInt(i));
+      results.push([i.toString(), isPrime]);
     }
 
-    setStatus(`Submitting ${results.length} primes...`);
+    const primesOnly = results
+      .filter(([, isPrime]) => isPrime)
+      .map(([n]) => BigInt(n));
+    setStatus(`Submitting ${primesOnly.length} primes...`);
+
     await fetch("/api/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ primes: results.map((n) => n.toString()) }),
+      body: JSON.stringify({ results }),
     });
 
-    setFound([...found(), ...results]);
+    setFound([...found(), ...primesOnly]);
     setStatus("Done.");
   };
 

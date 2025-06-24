@@ -5,79 +5,105 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
-
+use num_bigint::BigUint;
+use num_traits::{One, Zero};
 use serde::{Deserialize, Serialize};
 use std::{
     net::SocketAddr,
+    str::FromStr,
     sync::{Arc, Mutex},
 };
 use tokio::net::TcpListener;
-use tower_http::services::ServeDir;
-use tower_http::services::ServeFile;
+use tower_http::services::{ServeDir, ServeFile};
 
-// === Shared number range tracker ===
-type SharedCounter = Arc<Mutex<u64>>;
+type SharedCounter = Arc<Mutex<BigUint>>;
+type SharedPrimes = Arc<Mutex<Vec<bool>>>;
 
 #[derive(Serialize)]
 struct Range {
-    start: u64,
-    end: u64,
+    start: String,
+    end: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct PrimeResult {
-    primes: Vec<u64>,
+    results: Vec<(String, bool)>,
 }
 
 const DIST: &str = "/var/www/primehack/client/dist";
 
 #[tokio::main]
 async fn main() {
-    // Start counter at 1,000,000
-    let counter = Arc::new(Mutex::new(1_000_000u64));
+    let counter = Arc::new(Mutex::new(BigUint::zero()));
+    let found_primes = Arc::new(Mutex::new(Vec::new()));
+
     let api_router = Router::new()
         .route(
-            "/range",
+            "/get-task",
             get({
                 let c = counter.clone();
                 move || get_range(c)
             }),
         )
-        // static files afterwards
-        .route("/submit", post(receive_primes));
-    // .route_service("/{*path}", ServeDir::new(DIST));
-    // Build the app
+        .route(
+            "/submit",
+            post({
+                let primes = found_primes.clone();
+                move |payload| receive_primes(primes.clone(), payload)
+            }),
+        )
+        .route(
+            "/get-primes",
+            get({
+                let primes = found_primes.clone();
+                move || get_primes(primes.clone())
+            }),
+        )
+        .route("/hello-world", get(hello_world));
 
-    let app = Router::new()
-        .nest("/api", api_router)
-        // Serve static files for all other routes (SPA)
-        .fallback_service(
-            ServeDir::new(DIST).not_found_service(ServeFile::new(format!("{}/index.html", DIST))),
-        );
+    let app = Router::new().nest("/api", api_router).fallback_service(
+        ServeDir::new(DIST).not_found_service(ServeFile::new(format!("{}/index.html", DIST))),
+    );
 
-    // Start the server
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     let listener = TcpListener::bind(addr).await.unwrap();
-    println!("🚀 Server running at http://{}", addr);
-
     axum::serve(listener, app.into_make_service())
         .await
         .unwrap();
 }
 
-// === API Handlers ===
-
 async fn get_range(counter: SharedCounter) -> impl IntoResponse {
     let mut current = counter.lock().unwrap();
-    let range = Range {
-        start: *current,
-        end: *current + 100,
-    };
-    *current += 101;
-    Json(range)
+    let start = current.clone();
+    let end = &start + BigUint::from(999u64);
+    *current += BigUint::from(1000u64);
+    Json(Range {
+        start: start.to_string(),
+        end: end.to_string(),
+    })
 }
 
-async fn receive_primes(Json(data): Json<PrimeResult>) -> impl IntoResponse {
-    println!("📬 Received primes: {:?}", data.primes);
+async fn receive_primes(state: SharedPrimes, Json(data): Json<PrimeResult>) -> impl IntoResponse {
+    let mut primes = state.lock().unwrap();
+    for (num_str, is_prime) in data.results {
+        if let Ok(big) = BigUint::from_str(&num_str) {
+            if let Ok(idx) = usize::try_from(big) {
+                if idx >= primes.len() {
+                    primes.resize(idx + 1, false);
+                }
+                primes[idx] = is_prime;
+            }
+        }
+    }
+    println!("📬 Updated primes. Length: {}", primes.len());
     StatusCode::OK
+}
+
+async fn get_primes(state: SharedPrimes) -> impl IntoResponse {
+    let primes = state.lock().unwrap();
+    Json(primes.clone())
+}
+
+async fn hello_world() -> impl IntoResponse {
+    Json("Hello, World!")
 }
