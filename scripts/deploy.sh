@@ -33,7 +33,7 @@ echo "🧱 Building frontend (Vite)…"
   export PNPM_CONFIG_NETWORK_CONCURRENCY=2
   export NODE_OPTIONS="--max_old_space_size=256"
 
-  pnpm install --frozen-lockfile --reporter=silent
+  pnpm install --reporter=silent
 
   echo "🚧 Running Vite build..."
 if ! pnpm run build; then
