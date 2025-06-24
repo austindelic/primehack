@@ -6,7 +6,7 @@ use axum::{
     routing::{get, post},
 };
 use num_bigint::BigUint;
-use num_traits::{One, Zero};
+use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 use std::{
     net::SocketAddr,
