@@ -7,8 +7,6 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::File,
-    io::Write,
     net::SocketAddr,
     sync::{Arc, Mutex},
 };
@@ -24,8 +22,9 @@ type SharedResults = Arc<Mutex<Vec<IterationResult>>>;
 
 #[derive(Serialize)]
 struct IterationTask {
-    iteration_start: u64,
-    iteration_end: u64,
+    start_iter: u64,
+    end_iter: u64,
+    current_residue: String, // As decimal string
     prime_exponent: u64,
 }
 
@@ -33,20 +32,17 @@ struct IterationTask {
 struct IterationResult {
     start: u64,
     end: u64,
-    status: String,
+    residue: String,
+}
+
+#[derive(Serialize)]
+struct Status {
+    current_iteration: u64,
+    total_results: usize,
 }
 
 #[tokio::main]
 async fn main() {
-    // Write largest known prime representation to a file
-    let mut file = File::create("largest_prime.txt").expect("Failed to create file");
-    let message = format!(
-        "The current largest known prime is 2^{} - 1\n",
-        PRIME_EXPONENT
-    );
-    file.write_all(message.as_bytes())
-        .expect("Failed to write to file");
-
     let counter = Arc::new(Mutex::new(0u64));
     let results = Arc::new(Mutex::new(Vec::new()));
 
@@ -72,6 +68,22 @@ async fn main() {
                 move || get_all_results(r.clone())
             }),
         )
+        .route(
+            "/reset",
+            post({
+                let c = counter.clone();
+                let r = results.clone();
+                move || reset_state(c.clone(), r.clone())
+            }),
+        )
+        .route(
+            "/status",
+            get({
+                let c = counter.clone();
+                let r = results.clone();
+                move || get_status(c.clone(), r.clone())
+            }),
+        )
         .route("/hello-world", get(hello_world));
 
     let app = Router::new().nest("/api", api_router).fallback_service(
@@ -88,12 +100,20 @@ async fn main() {
 async fn get_iteration_task(counter: SharedIteration) -> impl IntoResponse {
     let mut current = counter.lock().unwrap();
     let start = *current;
-    let end = start + TASK_SIZE;
-    *current += TASK_SIZE;
+    let end = (start + TASK_SIZE).min(PRIME_EXPONENT - 2);
+    *current = end;
+
+    let current_residue = if start == 0 {
+        "4".to_string() // Initial residue
+    } else {
+        // TODO: Fetch last submitted residue (append a residue chain to SharedResults)
+        "MISSING_PREV".to_string()
+    };
 
     Json(IterationTask {
-        iteration_start: start,
-        iteration_end: end,
+        start_iter: start,
+        end_iter: end,
+        current_residue,
         prime_exponent: PRIME_EXPONENT,
     })
 }
@@ -110,6 +130,21 @@ async fn submit_result(
 async fn get_all_results(state: SharedResults) -> impl IntoResponse {
     let results = state.lock().unwrap();
     Json(results.clone())
+}
+
+async fn reset_state(counter: SharedIteration, results: SharedResults) -> impl IntoResponse {
+    *counter.lock().unwrap() = 0;
+    results.lock().unwrap().clear();
+    StatusCode::OK
+}
+
+async fn get_status(counter: SharedIteration, results: SharedResults) -> impl IntoResponse {
+    let current = *counter.lock().unwrap();
+    let total = results.lock().unwrap().len();
+    Json(Status {
+        current_iteration: current,
+        total_results: total,
+    })
 }
 
 async fn hello_world() -> impl IntoResponse {

@@ -1,44 +1,41 @@
 import { createSignal, For } from "solid-js";
-import { prime_bigint } from "./pkg/wasm";
+import { llt_chunked } from "./pkg/wasm"; // Make sure this is exported from your WASM
 
 export default function PrimeHackApp() {
   const [status, setStatus] = createSignal("Idle");
-  const [found, setFound] = createSignal<bigint[]>([]);
+  const [found, setFound] = createSignal<string[]>([]);
   const [running, setRunning] = createSignal(false);
 
   const generateAndSubmit = async () => {
     while (running()) {
-      setStatus("Fetching range...");
+      setStatus("Fetching chunk...");
       const res = await fetch("/api/get-task");
-      const { start, end } = await res.json();
+      const task = await res.json(); // start_iter, end_iter, current_residue, prime_exponent
 
-      const startBig = BigInt(start);
-      const endBig = BigInt(end);
-      const results: [string, boolean][] = [];
+      setStatus(
+        `Running LLT iterations ${task.start_iter} to ${task.end_iter}...`
+      );
+      const residue = llt_chunked(
+        BigInt(task.start_iter),
+        BigInt(task.end_iter),
+        task.current_residue,
+        task.prime_exponent.toString()
+      );
 
-      setStatus(`Testing numbers from ${start} to ${end}...`);
-
-      for (let i = startBig; i <= endBig; i++) {
-        const isPrime = prime_bigint(i.toString());
-        results.push([i.toString(), isPrime]);
-      }
-
-      const primesOnly = results
-        .filter(([, isPrime]) => isPrime)
-        .map(([n]) => BigInt(n));
-
-      setStatus(`Submitting ${primesOnly.length} primes...`);
-
+      setStatus(`Submitting residue for iter ${task.end_iter}...`);
       await fetch("/api/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ results }),
+        body: JSON.stringify({
+          start: task.start_iter,
+          end: task.end_iter,
+          residue,
+        }),
       });
 
-      setFound((prev) => [...primesOnly, ...prev].slice(0, 100));
-
-      setStatus("Waiting for next range...");
-      await new Promise((r) => setTimeout(r, 100)); // small pause
+      setFound((prev) => [residue, ...prev].slice(0, 100));
+      setStatus("Waiting for next task...");
+      await new Promise((r) => setTimeout(r, 100));
     }
     setStatus("Stopped.");
   };
@@ -71,8 +68,8 @@ export default function PrimeHackApp() {
 
       <p class="text-gray-400 mb-4">{status()}</p>
 
-      <div class="bg-[#111] p-4 rounded h-64 overflow-y-scroll text-green-400 font-mono">
-        <For each={found()}>{(p) => <div>{p.toString()}</div>}</For>
+      <div class="bg-[#111] p-4 rounded h-64 overflow-y-scroll text-green-400 font-mono text-xs">
+        <For each={found()}>{(res) => <div>Residue: {res}</div>}</For>
       </div>
     </div>
   );

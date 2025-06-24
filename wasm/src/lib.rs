@@ -119,3 +119,18 @@ pub fn pow_front(b: &str, e: &str) -> String {
 
     result.to_string()
 }
+
+#[wasm_bindgen]
+pub fn llt_chunked(start: u64, end: u64, residue: &str, exponent: &str) -> String {
+    let mut s = BigUint::from_str(residue).unwrap_or(BigUint::from(4u32));
+    let p = BigUint::from_str(exponent).unwrap();
+    let m = pow(&BigUint::from(2u32), &p) - BigUint::one();
+
+    let mut i = start;
+    while i < end {
+        s = (s.clone() * s.clone() - BigUint::from(2u32)) % &m;
+        i += 1;
+    }
+
+    s.to_string()
+}
