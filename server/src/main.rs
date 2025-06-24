@@ -36,7 +36,8 @@ async fn main() {
     let counter = Arc::new(Mutex::new(1_000_000u64));
 
     // Build the app
-    let app = Router::new()
+
+    let api_router = Router::new()
         .route(
             "/range",
             get({
@@ -44,8 +45,12 @@ async fn main() {
                 move || get_range(c)
             }),
         )
-        .route("/submit", post(receive_primes))
-        // static files afterwards
+        .route("/submit", post(receive_primes));
+
+    let app = Router::new()
+        // all routes in api_router will now live under /api/…
+        .nest("/api", api_router)
+        // serve your SPA (or static files) at the root
         .route_service("/", ServeDir::new(DIST))
         .route_service("/{*path}", ServeDir::new(DIST));
 
