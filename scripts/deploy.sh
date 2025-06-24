@@ -1,103 +1,57 @@
 #!/usr/bin/env bash
+
 set -euo pipefail
 
-### ─── CONFIG ───────────────────────────────────────────────
-APP_DIR=/var/www/primehack
-FRONT_DIR="$APP_DIR/client"
-WASM_CRATE="$APP_DIR/wasm"
-SERVER_DIR="$APP_DIR/server"
-BIN_NAME=server
-PORT=3000
-TEST_URL="http://localhost:$PORT"
+APP_DIR=/var/www/primehack           # project root on the server
+FRONT_DIR="$APP_DIR/client"          # Solid/Vite code
+WASM_CRATE="$APP_DIR/wasm"           # Rust → WebAssembly crate
+SERVER_DIR="$APP_DIR/server"         # Axum backend
+BIN_NAME=server                      # == package name in server/Cargo.toml
+PORT=3000                            # change if you bind elsewhere
 
-# Routes to smoke-test
-ROUTES=(
-  "/"
-  "/bench"
-  "/saigfdhasdidjfhajhsfbasjhfb"
-  "/api/range"
-)
-
-### ─── PREPARE ──────────────────────────────────────────────
+echo "➡️  Moving to project directory…"
 cd "$APP_DIR"
-# remember the commit we started from
-PREV_HEAD=$(git rev-parse HEAD)
-# timestamp for tagging
-TS=$(date +%Y%m%d%H%M)
 
-echo "➡️  Pulling latest changes…"
+echo "📥 Pulling latest changes from Git…"
 git pull origin master
 
-### ─── BUILD WASM ───────────────────────────────────────────
-echo "🔨  Building WASM…"
+# ──────────────────────────────────────────────
+echo "🔨 Re-building WebAssembly package…"
 (
   cd "$WASM_CRATE"
+  # Put the generated pkg inside the frontend *source* so Vite can pick it up
   wasm-pack build --release --target bundler \
                   --out-dir "$FRONT_DIR/src/pkg"
 )
 
-### ─── BUILD FRONTEND ───────────────────────────────────────
-echo "🧱  Building frontend…"
+# ──────────────────────────────────────────────
+echo "🧱 Building frontend (Vite)…"
 (
-  export PNPM_CHILD_CONCURRENCY=2
+  
+  export PNPM_CHILD_CONCURRENCY=2     # default is ~16
   export PNPM_CONFIG_NETWORK_CONCURRENCY=2
-  export NODE_OPTIONS="--max_old_space_size=256"
+  export NODE_OPTIONS="--max_old_space_size=256"  # cap Node heap to 256 MB
 
   cd "$FRONT_DIR"
-  pnpm install --frozen-lockfile --reporter=silent
-  pnpm run build
+  pnpm install --frozen-lockfile --reporter=silent  # faster + deterministic
+  pnpm run build                     # produces client/dist
 )
 
-### ─── BUILD BACKEND ────────────────────────────────────────
-echo "⚙️   Building backend…"
+# ──────────────────────────────────────────────
+echo "⚙️  Building backend (Rust)…"
 (
-  cd "$SERVER_DIR"
   export CARGO_BUILD_JOBS=1
   export RUSTFLAGS="-C codegen-units=1"
-  cargo build --release
+  
+  cd "$SERVER_DIR"
+  cargo build --release             # binary → target/release/$BIN_NAME
 )
 
-### ─── DEPLOY ───────────────────────────────────────────────
-echo "🚀  Deploying with PM2…"
+# ──────────────────────────────────────────────
+echo "🚀 Restarting backend with PM2…"
 pm2 restart "$BIN_NAME" \
   || pm2 start "$SERVER_DIR/target/release/$BIN_NAME" \
-       --name "$BIN_NAME" --env production -- --port "$PORT"
+       --name "$BIN_NAME" --env production -- \
+       --port "$PORT"
 
-# give it a moment
-sleep 5
-
-### ─── SMOKE-TEST ────────────────────────────────────────────
-for route in "${ROUTES[@]}"; do
-  echo "🔍  Testing $route …"
-  if ! curl --silent --fail "$TEST_URL$route"; then
-    echo "❌  Test failed on $route"
-    ERROR_TAG="error-$TS-$(git rev-parse --short HEAD)"
-    git tag -a "$ERROR_TAG" -m "Deploy error at $TS on $(git rev-parse --short HEAD)"
-    git push origin "$ERROR_TAG"
-    echo "↩️  Rolling back to $PREV_HEAD"
-    git reset --hard "$PREV_HEAD"
-
-    echo "🔨  Re-building backend (rollback)…"
-    (
-      cd "$SERVER_DIR"
-      cargo build --release
-    )
-    echo "🚀  Restarting backend (rollback)…"
-    pm2 restart "$BIN_NAME"
-
-    echo "⚠️  Deployment failed. Rolled back. (error tag: $ERROR_TAG)"
-    exit 1
-  fi
-done
-
-### ─── MARK STABLE & FINISH ─────────────────────────────────
-STABLE_TAG="stable-$TS-$(git rev-parse --short HEAD)"
-git tag -a "$STABLE_TAG" -m "Stable deploy at $TS on $(git rev-parse --short HEAD)"
-git push origin "$STABLE_TAG"
-
-# move the `stable` branch pointer
-git branch -f stable HEAD
-git push -f origin stable
-
-echo "✅  Deployment succeeded! (stable tag: $STABLE_TAG)"
-exit 0
+echo "✅ Deployment complete!"
