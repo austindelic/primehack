@@ -36,10 +36,12 @@ echo "🧱 Building frontend (Vite)…"
   pnpm install --frozen-lockfile --reporter=silent
 
   echo "🚧 Running Vite build..."
-  if ! pnpm run build; then
-    echo "❌ Vite build failed!"
-    exit 1
-  fi
+if ! pnpm run build; then
+  echo "❌ Vite build failed. Showing logs:"
+  cat vite.config.ts || echo "(no vite.config.ts)"
+  cat package.json | grep '"build"' || echo "(no build script)"
+  exit 1
+fi
 )
 
 # ──────────────────────────────────────────────
