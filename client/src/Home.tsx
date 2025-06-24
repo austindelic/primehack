@@ -5,61 +5,64 @@ export default function PrimeHackApp() {
   const [status, setStatus] = createSignal("Idle");
   const [found, setFound] = createSignal<string[]>([]);
   const [running, setRunning] = createSignal(false);
+  const [progress, setProgress] = createSignal(0);
 
   const generateAndSubmit = async () => {
     while (running()) {
       setStatus("Fetching chunk...");
-      const res = await fetch("/api/get-task");
-      console.log("Fetched response:", res);
-
-      const text = await res.text();
-      console.log("Raw response text:", text);
-
-      const task = JSON.parse(text);
-      console.log("Parsed task:", task);
-      setStatus(
-        `Running LLT iterations ${task.start_iter} to ${task.end_iter}...`
-      );
-      let residue = "error";
 
       try {
-        console.log("Calling llt_chunked with:", {
-          start: task.start_iter,
-          end: task.end_iter,
-          residue: task.current_residue,
-          exponent: task.prime_exponent.toString(),
-        });
+        const res = await fetch("/api/get-task");
+        const text = await res.text();
+        const task = JSON.parse(text);
 
-        residue = llt_chunked(
-          BigInt(task.start_iter),
-          BigInt(task.end_iter),
-          task.current_residue,
-          task.prime_exponent.toString()
+        console.log("Parsed task:", task);
+        setStatus(
+          `Running LLT iterations ${task.start_iter} to ${task.end_iter}...`
         );
 
-        console.log("llt_chunked result:", residue);
+        let residue = "error";
+        try {
+          residue = llt_chunked(
+            BigInt(task.start_iter),
+            BigInt(task.end_iter),
+            task.current_residue,
+            task.prime_exponent.toString()
+          );
+          console.log("llt_chunked result:", residue);
+        } catch (err) {
+          console.error("🔥 WASM crashed:", err);
+          setStatus("Error in WASM computation");
+          stop();
+          return;
+        }
+
+        // Update progress
+        const percent = (task.end_iter / (task.prime_exponent - 2)) * 100;
+        setProgress(percent);
+
+        setStatus(`Submitting residue for iter ${task.end_iter}...`);
+        await fetch("/api/submit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            start: task.start_iter,
+            end: task.end_iter,
+            residue,
+          }),
+        });
+
+        setFound((prev) => [residue, ...prev].slice(0, 100));
+        setStatus("Waiting for next task...");
+        await new Promise((r) => setTimeout(r, 100));
       } catch (err) {
-        console.error("🔥 WASM crashed:", err);
-        setStatus("Error in WASM computation");
+        console.error("Error fetching or processing task:", err);
+        setStatus("Failed to fetch task");
         stop();
         return;
       }
-
-      setStatus(`Submitting residue for iter ${task.end_iter}...`);
-      await fetch("/api/submit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          start: task.start_iter,
-          end: task.end_iter,
-          residue,
-        }),
-      });
-
-      setFound((prev) => [residue, ...prev].slice(0, 100));
-      setStatus("Waiting for next task...");
-      await new Promise((r) => setTimeout(r, 100));
     }
+
     setStatus("Stopped.");
   };
 
@@ -87,6 +90,14 @@ export default function PrimeHackApp() {
         <button class="bg-red-600 px-4 py-2 rounded font-bold" onClick={stop}>
           Stop
         </button>
+      </div>
+
+      {/* Progress bar */}
+      <div class="w-full bg-gray-700 rounded h-4 mb-4 overflow-hidden">
+        <div
+          class="bg-green-500 h-full transition-all duration-300"
+          style={{ width: `${progress()}%` }}
+        ></div>
       </div>
 
       <p class="text-gray-400 mb-4">{status()}</p>
