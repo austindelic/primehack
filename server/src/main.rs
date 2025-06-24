@@ -46,7 +46,7 @@ async fn main() {
         .route("/submit", post(receive_primes))
         // static files afterwards
         .route("/submit", post(receive_primes))
-        //.route_service("/", ServeDir::new(DIST))
+        .route_service("/", ServeDir::new(DIST))
         .route_service("/{*path}", ServeDir::new(DIST));
     // Build the app
 
