@@ -20,12 +20,30 @@ export default function PrimeHackApp() {
       setStatus(
         `Running LLT iterations ${task.start_iter} to ${task.end_iter}...`
       );
-      const residue = llt_chunked(
-        BigInt(task.start_iter),
-        BigInt(task.end_iter),
-        task.current_residue,
-        task.prime_exponent.toString()
-      );
+      let residue = "error";
+
+      try {
+        console.log("Calling llt_chunked with:", {
+          start: task.start_iter,
+          end: task.end_iter,
+          residue: task.current_residue,
+          exponent: task.prime_exponent.toString(),
+        });
+
+        residue = llt_chunked(
+          BigInt(task.start_iter),
+          BigInt(task.end_iter),
+          task.current_residue,
+          task.prime_exponent.toString()
+        );
+
+        console.log("llt_chunked result:", residue);
+      } catch (err) {
+        console.error("🔥 WASM crashed:", err);
+        setStatus("Error in WASM computation");
+        stop();
+        return;
+      }
 
       setStatus(`Submitting residue for iter ${task.end_iter}...`);
       await fetch("/api/submit", {
